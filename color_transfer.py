@@ -5,19 +5,22 @@ import matplotlib.pyplot as plt
 
 def ReshapeHistogram(Is, It, perc):
     #convert Is, It to CIELab color space
-    #compute Smax
-    #rgb = io.imread(filename)
     Is = color.rgb2lab(Is)
     It = color.rgb2lab(It)
     Io = Is.copy()
 
+    #compute Smax
     V = 0.3
-    I = np.concatenate([Is, It])
-    B = math.ceil((np.max(I) - np.min(I) + 1)/V)
+    Is_max = np.max(Is)
+    It_max = np.max(It)
+    Is_min = np.min(Is)
+    It_min = np.min(It)
+    #I = np.concatenate([Is, It])
+    B = math.ceil((max(Is_max, It_max) - min(Is_min, It_min) + 1)/V)
     Bmin = 10
     Smax = math.floor(math.log2(B/Bmin))
     print(Smax)
-    I_min = np.min(I)
+    I_min = min(Is_min, It_min)
     
     for i in range(3):
         Is_c = Is[:,:,i]
@@ -43,13 +46,15 @@ def ReshapeHistogram(Is, It, perc):
         vt_ = [h[1] for h in Ht]
 
         Hsk = np.array(Hs_)
-        Htk = np.array(Ht_)
+        Htk = np.array(Ht_) 
+        #print('sums: ', np.sum(Hsk), np.sum(Htk))
+        Htk = Htk * (np.sum(Hsk)/np.sum(Htk)) #
+        Ht_ = Htk
+        print('sums: ', np.sum(Hsk), np.sum(Htk))
         Hok = np.array(Hs_)
-        for k in range(1, int(perc*Smax)):
+        for k in range(1, int(perc*Smax)+1):
             print(i, k)
-            #Hsk = Hs_.copy()
-            #Htk = Ht_.copy()
-            #down / upsample Hs_
+            #smooth histogram
             scale = math.pow(2, Smax-k)
             Hsk_temp = Hsk.copy()
             for k_ in range(len(Hs)):
@@ -64,9 +69,7 @@ def ReshapeHistogram(Is, It, perc):
 
             Rmint = FindPeaks(Htk)
             Rmaxt = FindPeaks_max(Htk)
-            #Rmint = [r[0]+1 for r in Rmint]
-            #print('Rmint:')
-            #print(Rmint, B)
+            
             Hsk_ = Hsk.copy()
             print("weight: ", k/Smax)
             m_max = 0
@@ -76,12 +79,11 @@ def ReshapeHistogram(Is, It, perc):
                     m_max += 1
                     if m_max == len(Rmaxt):
                         break
-            Hsk_ = Hsk_ * (np.sum(Htk)/np.sum(Hsk_))
+            #Hsk_ = Hsk_ * (np.sum(Htk)/np.sum(Hsk_))
 
             Rmins = FindPeaks(Hsk_)
             Rmaxs = FindPeaks_max(Hsk_)
             m_max = 0
-            #Rmins = [r[0]+1 for r in Rmins]
             Hok = Hsk_.copy()
             for m in range(len(Rmins)-1):
                 if Rmaxs[m_max] in range(Rmins[m]+1, Rmins[m+1]):
@@ -104,12 +106,12 @@ def P(i, j, V, min_I):
     return 0
 
 def FindPeaks(H):
-    H_ = [] # H.copy()
+    H_ = [] 
     for i in range(len(H)-1):
         H_.append(H[i] - H[i+1])
     # H_[H_ >= 0] = 1
     # H_[H_ < 0] = -1
-    H_mult = []#H_.copy()
+    H_mult = []
     for i in range(len(H_)-1):
         H_mult.append(H_[i]*H_[i+1])
     H2 = []
@@ -118,51 +120,27 @@ def FindPeaks(H):
     #print('FindPeaks:')
     #print(H2)
     #print(np.array(H_mult))
-    H0 = [False]
-    
-    for i in range(1, len(H_mult)-1):
-        # if i==0:
-        #     if H_[i+1] <0:
-        #         H0.append(True)
-        # elif i == 
-        if H_[i] == 0:
-            if (H_[i+1] <0 and H_[i-1] == 0) or (H_[i-1] > 0 and H_[i+1]==0):
-                H0.append(True)
-            else:
-                H0.append(False)
-        else:
-            H0.append(False)
-    H0.append(False)
-    #print(H_mult)
-    #print(H2)
-            
             
     Hr = np.logical_and(np.array(H2)>0, np.array(H_mult)<=0)
-   
-    #print (Hr)
-    #input("")
+
     Rmin = np.argwhere(Hr == True)
     Rmin = [r[0]+1 for r in Rmin]
     return Rmin
 
 def FindPeaks_max(H):
-    H_ = [] # H.copy()
+    H_ = [] #gradient
     for i in range(len(H)-1):
         H_.append(H[i] - H[i+1])
-    # H_[H_ >= 0] = 1
-    # H_[H_ < 0] = -1
-    H_mult = []#H_.copy()
+
+    H_mult = [] #multiplied
     for i in range(len(H_)-1):
         H_mult.append(H_[i]*H_[i+1])
-    H2 = []
+    H2 = [] #second derivative
     for i in range(len(H_)-1):
         H2.append(H_[i] - H_[i+1])
     #print('FindPeaks:')
     #print(H2)
     #print(np.array(H_mult))
-   
-    #print(H_mult)
-    #print(H2)
             
     Hr = np.logical_and(np.array(H2)<0, np.array(H_mult)<0)
 
@@ -176,26 +154,22 @@ def RegionTransfer(Hs, Ht, wt):
     wt = 1.0
     Ho = []
     d = wt*np.std(Ht)/(ws*np.std(Hs))
-    #sum_ = np.sum(Hs)
     if ws*np.std(Hs)== 0:
         d = wt/ws
 
     for hs in Hs:
         Ho.append (((hs - ws*np.mean(Hs))*(d) + wt*np.mean(Ht)))
     
-    #print('Region Transfer:')
-    #print(ws, wt)
     #print(Hs)
     #print(Ho)
     Ho = np.array(Ho)
-    #print('sum:', np.sum(Ho))
-    #Ho = Ho * (sum_/np.sum(Ho))
     return np.where(Ho < 0, 0, Ho)
 
 def HistMatch(Is, Imin, Hs, Ho, V=1):
-    #Hs_ = Hs * np.sum(Ho)/np.sum(Hs)
+    Ho_ = Ho * np.sum(Hs)/np.sum(Ho)
+    print('histmatch sums:', np.sum(Hs), np.sum(Ho))
     Cs = np.cumsum(Hs)
-    Co = np.cumsum(Ho)
+    Co = np.cumsum(Ho_)
 
     Io = Is.copy()
 
@@ -212,21 +186,19 @@ def HistMatch(Is, Imin, Hs, Ho, V=1):
 
 def DrawHistogram(H, Hs, Ht, Imin, V=1, ic=0, scale=0):
     plt.figure()
-    #plt.subplot(1,1,1)
     plt.xlabel('v')
 
     v = []
-
     for i in range(len(H)):
         v.append(Imin + (i)*V)
-    #print(H)
+    
     plt.plot(v, Hs)
     plt.plot(v, Ht)
     plt.plot(v, H)
     plt.legend(['source', 'target', 'output'])
     #plt.show()
 
-    plt.savefig('histogram_%d_%d.png'%(ic, scale))
+    plt.savefig('histogram/histogram_%d_%d.png'%(ic, scale))
 
 
 def main():
@@ -248,13 +220,14 @@ def main():
 
     # return
 
-    file1 = 'bricks_sq.jpg'
-    file2 = 'pink_zigzag.jpg'
+    file1 = 'ballerina.jpg'
+    file2 = 'black_zigzag.jpg'
+    
     I_s = io.imread(file1)
     I_t = io.imread(file2)
     I_o = ReshapeHistogram(I_s, I_t, perc=1.0)
 
-    io.imsave('output.jpg', I_o)
+    io.imsave('golden_gate_5_color.jpg', I_o)
 
     
 
