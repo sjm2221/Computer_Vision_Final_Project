@@ -1,10 +1,13 @@
 import numpy as np
 import math
+import skimage
 from skimage import io, color
 import matplotlib.pyplot as plt
 
 def ReshapeHistogram(Is, It, perc):
     #convert Is, It to CIELab color space
+    #Is = skimage.filters.gaussian(Is)
+    #It = skimage.filters.gaussian(It)
     Is = color.rgb2lab(Is)
     It = color.rgb2lab(It)
     Io = Is.copy()
@@ -49,7 +52,8 @@ def ReshapeHistogram(Is, It, perc):
         Htk = np.array(Ht_) 
         #print('sums: ', np.sum(Hsk), np.sum(Htk))
         Htk = Htk * (np.sum(Hsk)/np.sum(Htk)) #
-        Ht_ = Htk
+        Ht_ = Htk.copy()
+        
         print('sums: ', np.sum(Hsk), np.sum(Htk))
         Hok = np.array(Hs_)
         for k in range(1, int(perc*Smax)+1):
@@ -94,7 +98,8 @@ def ReshapeHistogram(Is, It, perc):
             
             #DrawHistogram(Hok, Hsk, Htk, I_min, V, i, k)
             print('sum: ', np.sum(Htk), np.sum(Hok))            
-            DrawHistogram(Hok * (np.sum(Htk)/np.sum(Hok)), np.array(Hs_), Htk, I_min, V, i, k)
+            #DrawHistogram(Hok * (np.sum(Htk)/np.sum(Hok)), np.array(Hs_), Htk, I_min, V, i, k)
+            DrawHistogram(Hok * (np.sum(Htk)/np.sum(Hok)), np.array(Hs_), Ht_, I_min, V, i, k)
             Hsk = Hok * (np.sum(Htk)/np.sum(Hok))
         Io[:,:,i] = HistMatch(Is_c, I_min, Hs_, Hsk, V)
     
@@ -109,8 +114,6 @@ def FindPeaks(H):
     H_ = [] 
     for i in range(len(H)-1):
         H_.append(H[i] - H[i+1])
-    # H_[H_ >= 0] = 1
-    # H_[H_ < 0] = -1
     H_mult = []
     for i in range(len(H_)-1):
         H_mult.append(H_[i]*H_[i+1])
@@ -221,13 +224,15 @@ def main():
     # return
 
     file1 = 'ballerina.jpg'
-    file2 = 'black_zigzag.jpg'
+    file2 = 'sunset.jpg'
+    #file1 = 'golden_gate_5.jpg'
+    #file2 = 'golden_gate_sq.jpg'
     
     I_s = io.imread(file1)
     I_t = io.imread(file2)
     I_o = ReshapeHistogram(I_s, I_t, perc=1.0)
 
-    io.imsave('golden_gate_5_color.jpg', I_o)
+    io.imsave('ballerina_sunset1.jpg', I_o)
 
     
 
