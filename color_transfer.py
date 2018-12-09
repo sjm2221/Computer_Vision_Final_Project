@@ -4,7 +4,7 @@ import skimage
 from skimage import io, color
 import matplotlib.pyplot as plt
 
-def ReshapeHistogram(Is, It, perc, bw=False):
+def ReshapeHistogram(Is, It, perc, weight=False, bw=False):
     #convert Is, It to CIELab color space
     #Is = skimage.filters.gaussian(Is)
     #It = skimage.filters.gaussian(It)
@@ -23,7 +23,7 @@ def ReshapeHistogram(Is, It, perc, bw=False):
     Is_min = np.min(Is)
     It_min = np.min(It)
     #I = np.concatenate([Is, It])
-    B = math.ceil((max(Is_max, It_max) - min(Is_min, It_min) + 1)/V)
+    B = math.ceil((max(Is_max, It_max) - min(Is_min, It_min))/V)
     Bmin = 10
     Smax = math.floor(math.log2(B/Bmin))
     print(Smax)
@@ -71,7 +71,10 @@ def ReshapeHistogram(Is, It, perc, bw=False):
                 t = np.mean(Ht_[r_min:r_max])
                 Htk[k_] = t
             Hsk = Hsk_temp
-
+            #weights
+            if weight is True:
+                Htk = Htk*(k/Smax) + Hsk*(1-k/Smax)
+            #
             Rmint = FindPeaks(Htk)
             Rmaxt = FindPeaks_max(Htk)
             
@@ -251,13 +254,13 @@ def P(i, j, V, min_I):
 def FindPeaks(H):
     H_ = [] 
     for i in range(len(H)-1):
-        H_.append(H[i] - H[i+1])
+        H_.append(H[i+1] - H[i])
     H_mult = []
     for i in range(len(H_)-1):
         H_mult.append(H_[i]*H_[i+1])
     H2 = []
     for i in range(len(H_)-1):
-        H2.append(H_[i] - H_[i+1])
+        H2.append(H_[i+1] - H_[i])
     #print('FindPeaks:')
     #print(H2)
     #print(np.array(H_mult))
@@ -271,14 +274,14 @@ def FindPeaks(H):
 def FindPeaks_max(H):
     H_ = [] #gradient
     for i in range(len(H)-1):
-        H_.append(H[i] - H[i+1])
+        H_.append(H[i+1] - H[i])
 
     H_mult = [] #multiplied
     for i in range(len(H_)-1):
         H_mult.append(H_[i]*H_[i+1])
     H2 = [] #second derivative
     for i in range(len(H_)-1):
-        H2.append(H_[i] - H_[i+1])
+        H2.append(H_[i+1] - H_[i])
     #print('FindPeaks:')
     #print(H2)
     #print(np.array(H_mult))
@@ -292,7 +295,7 @@ def FindPeaks_max(H):
 def RegionTransfer(Hs, Ht, wt):
     #ws = 1-wt
     ws = 1.0
-    #wt = 1.0
+    wt = 1.0
     Ho = []
     d = wt*np.std(Ht)/(ws*np.std(Hs))
     if ws*np.std(Hs)== 0:
@@ -340,8 +343,11 @@ def HistMatch(Is, Imin, Hs, Ho, V=1):
     return Io
 
 def DrawHistogram(H, Hs, Ht, Imin, V=1, ic=0, scale=0):
+    font = {'fontname':'Times New Roman'}
+    plt.rc('font',family='Times New Roman')
+
     plt.figure()
-    plt.xlabel('v')
+    plt.xlabel('v', **font)
 
     v = []
     for i in range(len(Hs)):
@@ -388,7 +394,7 @@ def main():
     
     I_s = io.imread(file1)
     I_t = io.imread(file2)
-    I_o = ReshapeHistogram(I_s, I_t, perc=0.2, bw=False)
+    I_o = ReshapeHistogram(I_s, I_t, perc=1.0, weight=True, bw=False)
     #I_o = ReshapeHistogram_fixed_bin_size(I_s, I_t, perc=1.0, bw=False)
 
     io.imsave('output.jpg', I_o)
