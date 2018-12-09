@@ -320,10 +320,13 @@ def HistMatch(Is, Imin, Hs, Ho, V=1):
     Co_inv = np.repeat(len(Cs)-1, len(Cs))
     for i in range(len(Cs)):
         c = Cs[i]
-        for j in range(1, len(Co)):
-            if c >= Co[j-1] and c <Co[j]:
-                Co_inv[i] = j
-                break
+        if c < Co[0]:
+            Co_inv[i]=0
+        else:
+            for j in range(1, len(Co)):
+                if c >= Co[j-1] and c <Co[j]:
+                    Co_inv[i] = j
+                    break
     Io = Is.copy()
 
     bin_idx = 0
