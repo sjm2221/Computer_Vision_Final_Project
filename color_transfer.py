@@ -3,11 +3,10 @@ import math
 import skimage
 from skimage import io, color
 import matplotlib.pyplot as plt
+import argparse
 
 def ReshapeHistogram(Is, It, perc, weight=False, bw=False):
     #convert Is, It to CIELab color space
-    #Is = skimage.filters.gaussian(Is)
-    #It = skimage.filters.gaussian(It)
     Is = color.rgb2lab(Is)
     It = color.rgb2lab(It)
     
@@ -21,9 +20,6 @@ def ReshapeHistogram(Is, It, perc, weight=False, bw=False):
     Io = Is.copy()
     
 
-    # compute Smax
-    # Smax is the number of scales at which we wish to perform color transfer
-
     # V holds the histogram bin width
     V = 0.3
 
@@ -32,20 +28,20 @@ def ReshapeHistogram(Is, It, perc, weight=False, bw=False):
     It_max = np.max(It)
     Is_min = np.min(Is)
     It_min = np.min(It)
-    #I = np.concatenate([Is, It])
+    # find the minimum value
+    I_min = min(Is_min, It_min)
 
     # Find the number of bins by calculating the range of values and dividing by the bin size
     B = math.ceil((max(Is_max, It_max) - min(Is_min, It_min))/V)
     # Set minimum allowed histogram size
     Bmin = 10
 
+    # compute Smax
+    # Smax is the number of scales at which we wish to perform color transfer
     # set the maximum number of scales
     Smax = math.floor(math.log2(B/Bmin))
-#    print(Smax)
 
-    # find the minimum value
-    I_min = min(Is_min, It_min)
-
+    
     # Go through each channel of the images
     for i in range(3):
         Is_c = Is[:,:,i]
@@ -72,9 +68,6 @@ def ReshapeHistogram(Is, It, perc, weight=False, bw=False):
                 # update the count of the bin of source histogram
                 Ht[bin_idx] += 1
       
-        # Hs_ = Hs.copy()
-        # Ht_ = Ht.copy()
-
         Hsk = np.array(Hs)
         Htk = np.array(Ht)
         
@@ -84,7 +77,7 @@ def ReshapeHistogram(Is, It, perc, weight=False, bw=False):
         Htk = Htk * (np.sum(Hsk)/np.sum(Htk))
         Ht_ = Htk.copy()
         
-        print('sums: ', np.sum(Hsk), np.sum(Htk))
+        #print('sums: ', np.sum(Hsk), np.sum(Htk))
         Hok = np.array(Hs)
         
         # Go through each scale
@@ -100,13 +93,12 @@ def ReshapeHistogram(Is, It, perc, weight=False, bw=False):
                 r_max = min(k_ + int(scale/2)+1, len(Hs))
                 r_min = max(k_ - int(scale/2), 0)
                 s = np.mean(Hsk[r_min:r_max])
-                #print(s)
+
                 Hsk_temp[k_] = s
                 t = np.mean(Ht_[r_min:r_max])
                 Htk[k_] = t
             Hsk = Hsk_temp
             
-            #weights
             # Blend the source and target histograms based on the current scale
             # Lower scales will have more of the source histogram, while higher scales
             # will have more of the target histogram
@@ -117,12 +109,10 @@ def ReshapeHistogram(Is, It, perc, weight=False, bw=False):
             Rmint = FindPeaks(Htk)
             Rmaxt = FindPeaks_max(Htk)
             
-            Hsk_ = Hsk.copy()
-            print("weight: ", k/Smax)
+            Hsk_ = Hsk.copy()            
 
             # m_max stores an offest for the maxima list
             m_max = 0
-
             # Go through each of the maxima found
             for m in range(len(Rmaxt)):
                 # Check if the current max is less than the smallest minima
@@ -165,22 +155,21 @@ def ReshapeHistogram(Is, It, perc, weight=False, bw=False):
                     Hok[Rmins[m]:Rmins[m+1]] = RegionTransfer(Hsk_[Rmins[m]:Rmins[m+1]], Htk[Rmins[m]:Rmins[m+1]], k/Smax)
                     m_max += 1
                     
-            print('sum: ', np.sum(Htk), np.sum(Hok))            
-            DrawHistogram(Hok * (np.sum(Htk)/np.sum(Hok)), np.array(Hs), Htk, I_min, V, i, k)
-            #DrawHistogram(Hok * (np.sum(Htk)/np.sum(Hok)), np.array(Hs), Ht_, I_min, V, i, k)
+            #print('sum: ', np.sum(Htk), np.sum(Hok))            
+            #DrawHistogram(Hok * (np.sum(Htk)/np.sum(Hok)), np.array(Hs), Htk, I_min, V, i, k)
+            DrawHistogram(Hok * (np.sum(Htk)/np.sum(Hok)), np.array(Hs), Ht_, I_min, V, i, k)
 
             # Use the output of this scale as the source for the next scale
             Hsk = Hok * (np.sum(Htk)/np.sum(Hok))
                 
         # Update output channel to match the current channel
         Io[:,:,i] = HistMatch(Is_c, I_min, Hs, Hsk, V)
-    #print(Io)
     
     return color.lab2rgb(Io)
 
 # This is the same as the ReshapeHistogram method, except instead of using a bin width V to find a number of bins B,
 # we use a set bin size B and, from there, can find the bin width V
-def ReshapeHistogram_fixed_bin_size(Is, It, perc, B=400, bw=False):
+def ReshapeHistogram_fixed_bin_size(Is, It, perc, B=400, weight=False, bw=False):
     #convert Is, It to CIELab color space
     #Is = skimage.filters.gaussian(Is)
     #It = skimage.filters.gaussian(It)
@@ -238,7 +227,7 @@ def ReshapeHistogram_fixed_bin_size(Is, It, perc, B=400, bw=False):
         Htk = Htk * (np.sum(Hsk)/np.sum(Htk)) #
         Ht_ = Htk.copy()
         
-        print('sums: ', np.sum(Hsk), np.sum(Htk))
+        #print('sums: ', np.sum(Hsk), np.sum(Htk))
         Hok = np.array(Hs)
         for k in range(1, int(perc*Smax)+1):
             print(i, k)
@@ -254,6 +243,9 @@ def ReshapeHistogram_fixed_bin_size(Is, It, perc, B=400, bw=False):
                 t = np.mean(Ht_[r_min:r_max])
                 Htk[k_] = t
             Hsk = Hsk_temp
+
+            if weight is True:
+                Htk = Htk*(k/Smax) + Hsk*(1-k/Smax)
 
             Rmint = FindPeaks(Htk)
             Rmaxt = FindPeaks_max(Htk)
@@ -272,8 +264,7 @@ def ReshapeHistogram_fixed_bin_size(Is, It, perc, B=400, bw=False):
                     break
                 if Rmaxt[m_max] in range(Rmint[m]+1, Rmint[m+1]):                    
                     Hsk_[Rmint[m]:Rmint[m+1]] = RegionTransfer(Hsk[Rmint[m]:Rmint[m+1]], Htk[Rmint[m]:Rmint[m+1]], k/Smax)
-                    m_max += 1
-                    
+                    m_max += 1                   
             #Hsk_ = Hsk_ * (np.sum(Htk)/np.sum(Hsk_))
             
             #region transfer based on source
@@ -289,17 +280,12 @@ def ReshapeHistogram_fixed_bin_size(Is, It, perc, B=400, bw=False):
             for m in range(len(Rmins)-1):
                 if m_max == len(Rmaxs):
                     break
-                #print(Rmaxs[m_max])
-                #print(range(Rmins[m]+1, Rmins[m+1]))
                 if Rmaxs[m_max] in range(Rmins[m]+1, Rmins[m+1]):      
                     #print(Rmins[m]+1, Rmins[m+1])              
                     Hok[Rmins[m]:Rmins[m+1]] = RegionTransfer(Hsk_[Rmins[m]:Rmins[m+1]], Htk[Rmins[m]:Rmins[m+1]], k/Smax)
                     m_max += 1
-            #input("")
-            print('sum: ', np.sum(Htk), np.sum(Hok))            
+            #print('sum: ', np.sum(Htk), np.sum(Hok))            
             DrawHistogram(Hok * (np.sum(Htk)/np.sum(Hok)), np.array(Hsk), Htk, I_min, V, i, k)
-            #print(Rmins)
-            #print(Rmaxs)
             #DrawHistogram(Hok * (np.sum(Htk)/np.sum(Hok)), np.array(Hs), Ht_, I_min, V, i, k)
             Hsk = Hok * (np.sum(Htk)/np.sum(Hok))
         Io[:,:,i] = HistMatch(Is_c, I_min, Hs, Hsk, V)
@@ -330,9 +316,6 @@ def FindPeaks(H):
     H2 = []
     for i in range(len(H_)-1):
         H2.append(H_[i+1] - H_[i])
-    #print('FindPeaks:')
-    #print(H2)
-    #print(np.array(H_mult))
 
     # Find points where the function crosses 0 (H_mult <= 0) and is increasing (H2 > 0)
     Hr = np.logical_and(np.array(H2)>0, np.array(H_mult)<=0)
@@ -356,9 +339,6 @@ def FindPeaks_max(H):
     H2 = [] #second derivative
     for i in range(len(H_)-1):
         H2.append(H_[i+1] - H_[i])
-    #print('FindPeaks:')
-    #print(H2)
-    #print(np.array(H_mult))
             
     Hr = np.logical_and(np.array(H2)<0, np.array(H_mult)<0)
 
@@ -367,26 +347,25 @@ def FindPeaks_max(H):
     return Rmax
 
 
-def RegionTransfer(Hs, Ht, wt):
-    #ws = 1-wt
-    ws = 1.0
-    wt = 1.0
+def RegionTransfer(Hs, Ht, wt, weight=False):
+    #ws = 1.0
+    #wt = 1.0
     Ho = []
     
     # Check for division by 0
     # If so, we ignore the standard deviations of this region and just use 1 in the reshaping equation
-    d = wt*np.std(Ht)/(ws*np.std(Hs))
-    if ws*np.std(Hs)== 0:
-        d = wt/ws
+    d = np.std(Ht)/(np.std(Hs))
+    if np.std(Hs)== 0:
+        #d = wt/ws
+        d = 1.0
 
     # Reshape the region using the meand and standard deviation of source and target
     for hs in Hs:
-        hs_new = ((hs - ws*np.mean(Hs))*(d) + wt*np.mean(Ht))
-        hs_diff = hs_new - hs
-        Ho.append (hs + hs_diff*wt)
+        hs_new = ((hs - np.mean(Hs))*(d) + np.mean(Ht))
+        #hs_diff = hs_new - hs
+        #Ho.append (hs + hs_diff*wt)
+        Ho.append(hs_new)
     
-    #print(Hs)
-    #print(Ho)
     Ho = np.array(Ho)
     #return reshaped region with negative values clamped to 0
     return np.where(Ho < 0, 0, Ho)
@@ -395,7 +374,7 @@ def RegionTransfer(Hs, Ht, wt):
 def HistMatch(Is, Imin, Hs, Ho, V=1):
     # Normalize the count of output to be within range of source histogram
     Ho_ = Ho * np.sum(Hs)/np.sum(Ho)
-    print('histmatch sums:', np.sum(Hs), np.sum(Ho))
+    #print('histmatch sums:', np.sum(Hs), np.sum(Ho))
     
     # Create cumulative histograms from source and target histograms
     Cs = np.cumsum(Hs)
@@ -406,8 +385,7 @@ def HistMatch(Is, Imin, Hs, Ho, V=1):
     # for each bin in the source histogram...
     for i in range(len(Cs)):
         # Get the count of current bin
-        c = Cs[i]
-        
+        c = Cs[i]        
         if c < Co[0]:
             Co_inv[i]=0
         else:
@@ -419,22 +397,14 @@ def HistMatch(Is, Imin, Hs, Ho, V=1):
                     break
     Io = Is.copy()
 
-    bin_idx = 0
-    
+    #bin_idx = 0    
     # Go through each pixel of the output
     for i in range(Io.shape[0]):
         for j in range(Io.shape[1]):
             # find the bin that the pixel belongs to
             bin_idx = Co_inv[int((Is[i, j] - Imin)/V)]
-            #print(bin_idx)
             # set pixel value
             Io[i, j] = Imin + (bin_idx)*V
-    
-    #DrawHistogram(Co, Cs, Hs, Imin, V, 0, 6)
-    # print(Cs[200:300])
-    # print(Co[200:300])
-    # print(Co_inv[200:300])
-    # input("")
 
     return Io
 
@@ -463,39 +433,22 @@ def DrawHistogram(H, Hs, Ht, Imin, V=1, ic=0, scale=0):
 
 def main():
 
-    # test = np.array([1, 1, 1, 2, 3, 5, 3, 2, 1, 1, 1, 1, 1])
-    # test2 = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
-    # max_idx = FindPeaks_max(test)
-    # min_idx = FindPeaks(test)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--scale', type=float, default=1.0, help='level of scales to use (0.2, 0.4, 0.6, 0.8, 1.0)')
+    parser.add_argument('--source', type=str, default='ballerina.jpg', help='path to source image')
+    parser.add_argument('--target', type=str, default='sunset.jpg', help='path to target image')
+    parser.add_argument('--output', type=str, default='output.jpg', help='path to save image')
+    args = parser.parse_args()
 
-    # m_max = 0
-    # for m in range(len(min_idx)):
-    #     if max_idx[m] in range(min_idx[m] + 1, min_idx[m+1]):
-    #         #print(min_idx[m], min_idx[m+1])
-    #         test2[min_idx[m]:min_idx[m+1]] = RegionTransfer(test2[min_idx[m]:min_idx[m+1]], test[min_idx[m]:min_idx[m+1]], 0.75)
-    #         m_max += 1
-    #         if m_max == len(max_idx):
-    #             break
-    # print(test2)
-
-    # return
-
-
-    file1 = 'ballerina.jpg'
-    #file1 = 'bw.jpg'
-    file2 = 'sunset.jpg'
-    #file2 = 'ballerina.jpg'
-    #file1 = 'golden_gate_5.jpg'
-    #file2 = 'golden_gate_sq.jpg'
+    file1 = args.source
+    file2 = args.target
     
     I_s = io.imread(file1)
     I_t = io.imread(file2)
-    I_o = ReshapeHistogram(I_s, I_t, perc=1.0, weight=True, bw=False)
-    #I_o = ReshapeHistogram_fixed_bin_size(I_s, I_t, perc=1.0, bw=False)
+    I_o = ReshapeHistogram(I_s, I_t, perc=args.scale, weight=True, bw=False)
+    #I_o = ReshapeHistogram_fixed_bin_size(I_s, I_t, perc=args.scale, weight=True, bw=False)
 
-    io.imsave('output.jpg', I_o)
-
-    
+    io.imsave(args.output, I_o)
 
     
     return
